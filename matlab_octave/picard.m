@@ -80,6 +80,10 @@ function [Y, W] = picard(X, varargin)
 %                             'original' (default)
 %                             'pythonlike'
 %
+% 'extended'                  (bool) If true, uses the extended algorithm
+%                             (switching between sub- and super-gaussian).
+%                             Default: false
+%
 % Example:
 % --------
 %
@@ -135,6 +139,7 @@ w_init = [];
 python_defaults = false;
 distribution = 'logistic';
 renormalization = 'original';
+extended = false;
 
 % Read varargin
 
@@ -175,6 +180,8 @@ for i = 1:2:length(varargin)
             distribution = value;
         case 'renormalization'
             renormalization = value;
+        case 'extended'
+            extended = value;
         otherwise
             error(['Parameter ''' param ''' unknown'])
     end
@@ -243,9 +250,16 @@ X_white = w_init * X_white;
 % Run ICA
 switch mode
     case 'ortho'
+        if exist('extended', 'var') && extended
+            warning('picard:extendedOrthoNotSupported', ...
+                'Extended mode is not yet implemented for ortho mode. Using standard ortho ICA.');
+        end
         [Y, W_algo] = picardo(X_white, m, maxiter, tol, lambda_min, ls_tries, verbose);
     case 'standard'
-        [Y, W_algo] = picard_standard(X_white, m, maxiter, 2, tol, lambda_min, ls_tries, verbose, distribution, renormalization);
+        if ~exist('extended', 'var')
+            extended = false;
+        end
+        [Y, W_algo] = picard_standard(X_white, m, maxiter, 2, tol, lambda_min, ls_tries, verbose, distribution, renormalization, extended);
     otherwise
         error('Wrong ICA mode')
 end
