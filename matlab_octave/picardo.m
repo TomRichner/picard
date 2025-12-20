@@ -1,4 +1,4 @@
-function [Y, W] = picardo(X, m, maxiter, tol, lambda_min, ls_tries, verbose)
+function [Y, W] = picardo(X, m, maxiter, tol, lambda_min, ls_tries, verbose, extended)
 % Runs the Picard-O algorithm
 %
 % The algorithm is detailed in::
@@ -39,9 +39,13 @@ function [Y, W] = picardo(X, m, maxiter, tol, lambda_min, ls_tries, verbose)
 %     If true, the algorithm whitens the input signals. If False, the input
 %     signals should already by white.
 %
+%
 % verbose : boolean
 %     If true, prints the informations about the algorithm.
 %
+% extended : boolean
+%     If true, uses the extended algorithm (switching between sub- and
+%     super-gaussian).
 % Returns
 % -------
 % Y : array, shape (N, T)
@@ -68,19 +72,26 @@ r_list = {};
 current_loss = Inf;
 sign_change = false;
 
+signs = ones(N, 1);
+old_signs = signs;
+
 for n=1:maxiter
     % Compute the score function
     psiY = score(Y);
     psidY_mean = score_der(psiY);
     % Compute the relative gradient
     g = gradient(Y, psiY);
-    % Compute the signs of the kurtosis
-    K = psidY_mean - diag(g);
-    signs = sign(K);
-    if n > 1
-        sign_change = any(signs ~= old_signs);
+    
+    if extended
+        % Compute the signs of the kurtosis
+        K = psidY_mean - diag(g);
+        signs = sign(K);
+        if n > 1
+            sign_change = any(signs ~= old_signs);
+        end
+        old_signs = signs;
     end
-    old_signs = signs;
+    
     % Update the gradient
     g = diag(signs) * g;
     psidY_mean = psidY_mean .* signs;
@@ -105,7 +116,7 @@ for n=1:maxiter
     end
     G_old = G;
     % Flush the memory if there is a sign change.
-    if sign_change
+    if extended && sign_change
         current_loss = Inf;
         s_list = {};
         y_list = {};

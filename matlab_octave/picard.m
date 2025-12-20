@@ -250,11 +250,7 @@ X_white = w_init * X_white;
 % Run ICA
 switch mode
     case 'ortho'
-        if exist('extended', 'var') && extended
-            warning('picard:extendedOrthoNotSupported', ...
-                'Extended mode is not yet implemented for ortho mode. Using standard ortho ICA.');
-        end
-        [Y, W_algo] = picardo(X_white, m, maxiter, tol, lambda_min, ls_tries, verbose);
+        [Y, W_algo] = picardo(X_white, m, maxiter, tol, lambda_min, ls_tries, verbose, extended);
     case 'standard'
         if ~exist('extended', 'var')
             extended = false;
