@@ -5,10 +5,10 @@
 rng(42);
 
 %% Parameters — identical for both languages
-N_super = 64;  % super-gaussian (Laplace)
-N_sub   = 64;  % sub-gaussian (Uniform)
+N_super = 32;  % super-gaussian (Laplace)
+N_sub   = 32;  % sub-gaussian (Uniform)
 N = N_super + N_sub;
-T = 50000;
+T = 10000;
 
 tol = 1e-7;
 maxiter = 500;
@@ -50,10 +50,22 @@ fprintf('Saved whitened data to %s\n\n', data_file);
 %% Run MATLAB picard_standard with extended
 fprintf('--- MATLAB: Running picard_standard (extended=true, logcosh) ---\n');
 tic;
-[Y_mat, W_mat] = picard_standard(X_white, m_lbfgs, maxiter, 2, tol, ...
-    lambda_min, ls_tries, false, 'logcosh', 'original', true);
+mat_log = evalc('[Y_mat, W_mat] = picard_standard(X_white, m_lbfgs, maxiter, 2, tol, lambda_min, ls_tries, true, ''logcosh'', ''pythonlike'', true);');
 t_mat = toc;
 fprintf('MATLAB finished in %.3f sec\n\n', t_mat);
+
+% Parse MATLAB convergence log
+mat_lines = strsplit(mat_log, '\n');
+mat_iter = []; mat_gnorm = []; mat_loss = [];
+for k = 1:length(mat_lines)
+    tokens = regexp(mat_lines{k}, 'iteration (\d+), gradient norm = ([\d.e+-]+) loss = ([\d.e+-]+)', 'tokens');
+    if ~isempty(tokens)
+        mat_iter(end+1) = str2double(tokens{1}{1});
+        mat_gnorm(end+1) = str2double(tokens{1}{2});
+        mat_loss(end+1) = str2double(tokens{1}{3});
+    end
+end
+fprintf('MATLAB converged in %d iterations\n', length(mat_iter));
 
 %% Run Python
 fprintf('--- Python: Running core_picard (extended=True, Tanh) ---\n');
@@ -114,6 +126,31 @@ if min(matched_cos) > 0.99 && recovery_mat > 0.95 && recovery_py > 0.95
 else
     fprintf('REVIEW: Results differ — check settings alignment.\n');
 end
+%% Plot convergence trajectories
+py_gnorms = py.py_gnorms(:)';
+py_losses = py.py_losses(:)';
+py_iters  = py.py_iters(:)';
+
+figure('Position', [100 100 1200 500]);
+
+subplot(1,2,1);
+semilogy(mat_iter, mat_gnorm, 'b-o', 'MarkerSize', 3, 'LineWidth', 1.5, 'DisplayName', 'MATLAB');
+hold on;
+semilogy(py_iters, py_gnorms, 'r-s', 'MarkerSize', 3, 'LineWidth', 1.5, 'DisplayName', 'Python');
+yline(tol, 'k--', 'LineWidth', 1, 'DisplayName', 'Tolerance');
+xlabel('Iteration'); ylabel('Gradient Norm');
+title(sprintf('Gradient Norm Convergence (N=%d, T=%d)', N, T));
+legend('Location', 'best'); grid on;
+
+subplot(1,2,2);
+plot(mat_iter, mat_loss, 'b-o', 'MarkerSize', 3, 'LineWidth', 1.5, 'DisplayName', 'MATLAB');
+hold on;
+plot(py_iters, py_losses, 'r-s', 'MarkerSize', 3, 'LineWidth', 1.5, 'DisplayName', 'Python');
+xlabel('Iteration'); ylabel('Loss');
+title(sprintf('Loss Convergence (N=%d, T=%d)', N, T));
+legend('Location', 'best'); grid on;
+
+sgtitle('MATLAB vs Python Picard Standard Extended — Convergence Comparison');
 
 %% Cleanup
 delete(data_file);

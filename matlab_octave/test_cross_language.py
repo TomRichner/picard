@@ -66,21 +66,40 @@ def main():
     print(f"  lambda_min={lambda_min}, ls_tries={ls_tries}")
     
     import time
+    import io
+    import contextlib
+
+    # Capture verbose output to parse convergence trajectory
+    verbose_buf = io.StringIO()
     t0 = time.perf_counter()
-    Y_py, W_core, infos = core_picard(
-        X_init,
-        density=density,
-        ortho=False,
-        extended=True,
-        m=m_lbfgs,
-        max_iter=maxiter,
-        tol=tol,
-        lambda_min=lambda_min,
-        ls_tries=ls_tries,
-        verbose=False,
-        covariance=covariance
-    )
+    with contextlib.redirect_stdout(verbose_buf):
+        Y_py, W_core, infos = core_picard(
+            X_init,
+            density=density,
+            ortho=False,
+            extended=True,
+            m=m_lbfgs,
+            max_iter=maxiter,
+            tol=tol,
+            lambda_min=lambda_min,
+            ls_tries=ls_tries,
+            verbose=True,
+            covariance=covariance
+        )
     t_algo = time.perf_counter() - t0
+
+    # Parse iteration logs
+    import re
+    verbose_text = verbose_buf.getvalue()
+    py_iters = []
+    py_gnorms = []
+    py_losses = []
+    for line in verbose_text.split('\n'):
+        m = re.match(r'iteration (\d+), gradient norm = ([\d.e+-]+), loss = ([\d.e+-]+)', line)
+        if m:
+            py_iters.append(int(m.group(1)))
+            py_gnorms.append(float(m.group(2)))
+            py_losses.append(float(m.group(3)))
     
     # W_core is relative to X_init. Full W = W_core @ w_init
     W_py = W_core @ w_init
@@ -99,7 +118,10 @@ def main():
         'n_iterations': infos['n_iterations'],
         'gradient_norm': infos['gradient_norm'],
         'signs_py': infos['signs'],
-        'converged': infos['converged']
+        'converged': infos['converged'],
+        'py_gnorms': np.array(py_gnorms),
+        'py_losses': np.array(py_losses),
+        'py_iters': np.array(py_iters)
     })
     print(f"\nResults saved to {out_file}")
 
