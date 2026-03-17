@@ -65,6 +65,8 @@ def main():
     print(f"  N={N}, T={X_white.shape[1]}, tol={tol}, maxiter={maxiter}, m={m_lbfgs}")
     print(f"  lambda_min={lambda_min}, ls_tries={ls_tries}")
     
+    import time
+    t0 = time.perf_counter()
     Y_py, W_core, infos = core_picard(
         X_init,
         density=density,
@@ -75,9 +77,10 @@ def main():
         tol=tol,
         lambda_min=lambda_min,
         ls_tries=ls_tries,
-        verbose=True,
+        verbose=False,
         covariance=covariance
     )
+    t_algo = time.perf_counter() - t0
     
     # W_core is relative to X_init. Full W = W_core @ w_init
     W_py = W_core @ w_init
@@ -86,6 +89,7 @@ def main():
     print(f"Python iterations: {infos['n_iterations']}")
     print(f"Python gradient norm: {infos['gradient_norm']:.6e}")
     print(f"Python signs: {infos['signs']}")
+    print(f"Python algorithm time: {t_algo:.3f} sec")
     
     # Save results
     out_file = mat_file.replace('.mat', '_python_results.mat')

@@ -5,10 +5,10 @@
 rng(42);
 
 %% Parameters — identical for both languages
-N_super = 3;  % super-gaussian (Laplace)
-N_sub   = 3;  % sub-gaussian (Uniform)
+N_super = 64;  % super-gaussian (Laplace)
+N_sub   = 64;  % sub-gaussian (Uniform)
 N = N_super + N_sub;
-T = 5000;
+T = 50000;
 
 tol = 1e-7;
 maxiter = 500;
@@ -30,11 +30,12 @@ for i = 1:N_sub
     S(N_super+i, :) = S(N_super+i, :) / std(S(N_super+i, :));
 end
 
-%% Mix
-A = randn(N, N);
-while cond(A) > 10
-    A = randn(N, N);
-end
+%% Mixing matrix — well-conditioned by construction
+% QR gives random orthogonal matrix; controlled singular values guarantee cond ~5
+[Q1, ~] = qr(randn(N));
+[Q2, ~] = qr(randn(N));
+singular_values = linspace(1, 5, N);  % cond(A) = 5 by design
+A = Q1 * diag(singular_values) * Q2';
 X = A * S;
 
 %% Whiten (using picard's whitening — spherical)
@@ -50,7 +51,7 @@ fprintf('Saved whitened data to %s\n\n', data_file);
 fprintf('--- MATLAB: Running picard_standard (extended=true, logcosh) ---\n');
 tic;
 [Y_mat, W_mat] = picard_standard(X_white, m_lbfgs, maxiter, 2, tol, ...
-    lambda_min, ls_tries, true, 'logcosh', 'original', true);
+    lambda_min, ls_tries, false, 'logcosh', 'original', true);
 t_mat = toc;
 fprintf('MATLAB finished in %.3f sec\n\n', t_mat);
 
