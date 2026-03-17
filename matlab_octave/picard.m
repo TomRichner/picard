@@ -252,9 +252,6 @@ switch mode
     case 'ortho'
         [Y, W_algo] = picardo(X_white, m, maxiter, tol, lambda_min, ls_tries, verbose, extended);
     case 'standard'
-        if ~exist('extended', 'var')
-            extended = false;
-        end
         [Y, W_algo] = picard_standard(X_white, m, maxiter, 2, tol, lambda_min, ls_tries, verbose, distribution, renormalization, extended);
     otherwise
         error('Wrong ICA mode')

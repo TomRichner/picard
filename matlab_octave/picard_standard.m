@@ -79,7 +79,8 @@ end
 % Init
 [N, T] = size(X);
 if extended
-    C = (X * X') / T;
+    cov_input = (X * X') / T;
+    C = cov_input;
 end
 W = eye(N);
 Y = X;
@@ -99,9 +100,7 @@ for n_top = 1:maxiter
         psiY = tanh(Y);
     end
     % Compute the relative gradient
-    % Compute the relative gradient
     if extended
-        C = (Y * Y') / T;
         if strcmp(distribution, 'logistic')
             psidY = (- psiY.^2 + 1.) / 2.;
         else % logcosh
@@ -115,21 +114,8 @@ for n_top = 1:maxiter
         end
         old_signs = signs;
         G = diag(signs) * G;
-        psiY = diag(signs) * psiY;
-        % python: psidY *= signs[:, None]. In matlab signs is col vector.
-        % We don't use psidY later in loop except for hessian (which recomp it).
-        % But we need to update G.
+        % Extended infomax: add covariance to gradient
         G = G + C;
-        % python: psidY += 1. 
-        % This psidY update is not used for G here? 
-        % Wait, in python 'G' is computed using 'psidY' in ortho case for H_off?
-        % In non-ortho (this file): 
-        % G -= eye(N).
-        % if extended: G += C (which accounts for the 'eye(N)' term if C is identity for white data?)
-        % Actually python: 'if not ortho: G += C'. Then later 'G -= eye(N)'.
-        % If data is white, C=I, so G += I followed by G -= I cancels out? 
-        % No, G += C is done BEFORE G -= I. 
-        % So effective G = G_orig + C - I.
     else
         G = (psiY * Y') / T;
     end
@@ -155,27 +141,12 @@ for n_top = 1:maxiter
     G_old = G;
     % Flush the memory if there is a sign change.
     if extended && sign_change
-        current_loss = NaN; % Force recompute
+        current_loss = NaN;
         s_list = {};
         y_list = {};
         r_list = {};
     end
     % Find the L-BFGS direction
-    % Note: l_bfgs_direction recomputes psidY internally for Hessian. 
-    % We should pass signs to it?
-    % Python: h = _regularize_hessian(h, h_off, lambda_min) where h = inner(psidY, Y_square).
-    % Python psidY was updated with signs. 
-    % So we MUST pass signs to l_bfgs_direction or update Y effectively?
-    % Actually: Jacobian is diag(signs) * J_original. 
-    % The code in l_bfgs_direction computes psidY from Y using 'distribution'.
-    % If signs are mixed, simple 'Y' computation in l_bfgs is wrong if it assumes all positive?
-    % Wait, psiY = tanh(Y/2). psidY = (1-psiY^2)/2. depends on Y.
-    % If we changed sign of source, Y -> -Y? No, signs vector is just for the score function adaptation.
-    % We are effectively optimizing J(Y) = sum_i( log_lik_i(y_i) ). 
-    % extended means log_lik_i can be swapped.
-    % So we need to pass 'signs' to l_bfgs_direction to compute correct psidY?
-    % Yes. In python, psidY is computed once and reused. Here it is recomputed inside solve_hessian.
-    
     direction = l_bfgs_direction(Y, psiY, G, s_list, y_list, r_list, precon, lambda_min, signs, distribution, renormalization, extended);
     % Do a line_search in that direction:
     [converged, new_Y, new_W, new_loss, direction] = line_search(Y, W, direction, current_loss, ls_tries, verbose, signs, distribution, extended);
@@ -188,6 +159,9 @@ for n_top = 1:maxiter
     end
     Y = new_Y;
     W = new_W;
+    if extended
+        C = W * cov_input * W';
+    end
     current_loss = new_loss;
     if verbose
         fprintf('iteration %d, gradient norm = %.6g loss = %.6g\n', n_top, G_norm, current_loss)
